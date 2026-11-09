@@ -1,0 +1,43 @@
+# Copy to ~/.dbt/profiles.yml and fill in your own values.
+# Nothing here is a real credential.
+#
+# Two targets, one set of models. That is the point: the same SQL runs on
+# Postgres and on BigQuery, and switching is `--target bigquery`.
+
+gtm_warehouse:
+  target: supabase
+  outputs:
+
+    # --- Postgres (Supabase) -------------------------------------------
+    supabase:
+      type: postgres
+      host: aws-0-YOUR_REGION.pooler.supabase.com   # SESSION pooler, port 5432
+      port: 5432
+      user: postgres.YOUR_PROJECT_REF
+      password: "{{ env_var('SUPABASE_DB_PASSWORD') }}"
+      dbname: postgres
+      schema: analytics        # dbt builds here; it never writes to public
+      threads: 4
+      sslmode: require
+
+    # --- BigQuery ------------------------------------------------------
+    bigquery:
+      type: bigquery
+      method: service-account
+      project: YOUR_GCP_PROJECT_ID
+      dataset: analytics
+      keyfile: /path/to/your/bigquery-key.json      # forward slashes, even on Windows
+      location: us-east1       # MUST match where the dataset was created
+      threads: 4
+
+# Two things that cost an hour each if you get them wrong:
+#
+# 1. Use the SESSION pooler (5432), not the direct connection and not the
+#    transaction pooler (6543). The direct connection is IPv6-only on free
+#    Supabase projects and times out in a way that looks like a wrong password.
+#    The transaction pooler returns the connection between statements and
+#    breaks dbt.
+#
+# 2. `location` must match the dataset's actual region exactly. BigQuery
+#    reports a dataset in the wrong location as "not found", which reads as
+#    though it does not exist.

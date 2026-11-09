@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  # ---------- intermediate: these two fix the grain ----------
+  - name: int_account_routing
+    description: Latest router decision per company. Collapses 357 decisions over 44 accounts to one row each.
+    columns:
+      - name: company_key
+        tests: [unique, not_null]     # the guard: if this fails, dim_accounts fans out
+
+  - name: int_company_signals
+    description: Signal history folded to one row per company.
+    columns:
+      - name: company_key
+        tests: [unique, not_null]
+      - name: signal_count
+        tests: [not_null]
+
+  # ---------- marts ----------
+  - name: dim_accounts
+    description: >
+      One row per company. The spine for every account question.
+      Verified on live data: 442 rows, 442 distinct keys across three left joins.
+    columns:
+      - name: company_key
+        tests: [unique, not_null]
+      - name: is_good_fit
+        tests: [not_null]
+      - name: signal_count
+        tests: [not_null]
+      - name: icp_score
+        tests: [not_null]
+
+  - name: dim_contacts
+    description: >
+      One row per sequencer contact. All 41 sit on 4 email domains because the
+      only campaign run so far was a dry run to the author's own addresses.
+    columns:
+      - name: contact_id
+        tests: [unique, not_null]
+      - name: email
+        tests: [not_null]
+      - name: is_test
+        tests: [not_null]
+
+  - name: fct_outreach
+    description: >
+      One row per sequencer event. Every row is currently is_test = true;
+      a count of real outreach filters on `not is_test` and returns zero.
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: is_test
+        tests: [not_null]
+      - name: enrollment_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_enrollments')
+                field: enrollment_id
+      - name: event_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['sent','reply','auto_reply','unsubscribe','unsubscribe_repeat',
+                         'hard_bounce','send_failed','enrolled','claimed','completed',
+                         'deferred_daily_cap','rescheduled_outside_window',
+                         'blocked_test_mode','enroll_refused_suppressed','inbound_unmatched']
+
+  - name: fct_conversions
+    description: >
+      One row per inbound submission with its decision and handoff.
+      All 120 rows are test. Rates must be computed over `not is_test`,
+      which yields NULL - "not measurable", never 0%.
+    columns:
+      - name: submission_id
+        tests: [unique, not_null]
+      - name: is_test
+        tests: [not_null]

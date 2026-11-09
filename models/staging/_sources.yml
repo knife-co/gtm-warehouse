@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: gtm
+    description: >
+      Operational tables the P1-P6 pipelines write into, on Supabase.
+      dbt only ever reads these. To run against a different warehouse,
+      change `schema` here and nothing else.
+    schema: public          # BigQuery: change to your dataset name, e.g. analytics
+    tables:
+      - name: icp_companies
+        columns: [{name: company_key, tests: [unique, not_null]}]
+      - name: account_enrichment
+      - name: signals
+        columns: [{name: id, tests: [unique, not_null]}]
+      - name: router_decisions
+      - name: seq_campaigns
+      - name: seq_contacts
+      - name: seq_enrollments
+      - name: seq_events
+        columns: [{name: id, tests: [unique, not_null]}]
+      - name: inbound_submissions
+        columns: [{name: id, tests: [unique, not_null]}]
+      - name: inbound_decisions
+      - name: mql_handoffs

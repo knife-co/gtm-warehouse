@@ -1,0 +1,16 @@
+name: gtm_pipeline
+version: '1.0.0'
+profile: gtm_warehouse
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  gtm_pipeline:
+    staging:
+      +materialized: view     # cheap to store, never stale
+    intermediate:
+      +materialized: table    # several marts read these, so compute once
+    marts:
+      +materialized: table    # read repeatedly, so store the answer
