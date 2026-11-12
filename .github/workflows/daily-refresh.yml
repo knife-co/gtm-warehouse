@@ -1,0 +1,73 @@
+# Scheduled daily refresh.
+#
+# dbt Core runs on a machine, and a laptop is not a scheduler - it is asleep
+# at 6am. The free, honest options are GitHub Actions (this file) or a paid
+# dbt Cloud seat. This runs the whole project every morning and fails loudly
+# if a test breaks.
+#
+# Setup, once:
+#   Repo -> Settings -> Secrets and variables -> Actions -> New repository secret
+#     SUPABASE_DB_HOST      aws-0-<region>.pooler.supabase.com
+#     SUPABASE_DB_USER      postgres.<project-ref>
+#     SUPABASE_DB_PASSWORD  <your database password>
+# Nothing secret belongs in this file.
+
+name: dbt daily refresh
+
+on:
+  schedule:
+    - cron: '17 5 * * *'      # 05:17 UTC = 06:17 Lagos. Off the hour on purpose:
+                              # everything scheduled at :00 queues behind everything
+                              # else scheduled at :00.
+  workflow_dispatch:           # and a button, for running it by hand
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dbt
+        run: pip install dbt-core==1.12.6 dbt-postgres==1.11.0
+
+      - name: Write profile
+        env:
+          DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
+          DB_USER: ${{ secrets.SUPABASE_DB_USER }}
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<PROFILE
+          gtm_warehouse:
+            target: supabase
+            outputs:
+              supabase:
+                type: postgres
+                host: "$DB_HOST"
+                port: 5432
+                user: "$DB_USER"
+                password: "$DB_PASSWORD"
+                dbname: postgres
+                schema: analytics
+                threads: 4
+                sslmode: require
+          PROFILE
+
+      - name: Build
+        run: dbt run
+
+      - name: Test
+        run: dbt test
+
+      - name: Lineage docs
+        run: dbt docs generate
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dbt-target
+          path: target/
